@@ -1,0 +1,36 @@
+----
+AWS_REGION=$(aws configure get region)
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+BUCKET_NAME="gracychat-bucket-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+
+----
+API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name gracychat-stack --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
+
+----
+curl -X POST "${API_ENDPOINT}" -H "Content-Type: application/json" -d '{"query": "What'\''s the weather in London?"}'
+curl -X POST "${API_ENDPOINT}" -H "Content-Type: application/json" -d '{"query": "Tell me a joke."}'
+
+---
+
+aws cloudformation deploy \
+  --template-file cloudformation/gracychat.yaml \
+  --stack-name gracychat-stack \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides OpenWeatherApiKey="${OPENWEATHER_API_KEY}" \
+                        DynamoTableName="GracyChatLogs" \
+                        AssetsBucketName="${BUCKET_NAME}"
+
+aws cloudformation describe-stacks --stack-name gracychat-stack
+
+aws cloudformation update-stack \
+  --stack-name gracychat-stack \
+  --template-body file://cloudformation/gracychat.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameters ParameterKey=OpenWeatherApiKey,ParameterValue="${OPENWEATHER_API_KEY}" \
+               ParameterKey=DynamoTableName,ParameterValue="GracyChatLogs" \
+               ParameterKey=AssetsBucketName,ParameterValue="${BUCKET_NAME}"
+
+
+aws cloudformation describe-stacks --stack-name gracychat-stack \
+  --query 'Stacks[0].{StackName: StackName, CreationTime: CreationTime, LastUpdateTime: LastUpdatedTime, StackStatus: StackStatus, ApiEndpoint: Outputs[?OutputKey==`ApiEndpoint`].OutputValue}' \
+  --output json

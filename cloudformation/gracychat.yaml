@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description:  Deploys the GracyChat multi-domain chatbot application.
+
+Parameters:
+  OpenWeatherApiKey:
+    Type: String
+    Description: API key for OpenWeatherMap. Required for weather functionality.
+    NoEcho: true 
+  DynamoTableName:
+    Type: String
+    Description: Name of the DynamoDB table for logs.
+    Default: "GracyChatLogs"
+  AssetsBucketName:
+    Type: String
+    Description: Name of the S3 bucket for assets (Lambda code, docs).
+    Default: "!Sub 'gracychat-bucket-${AWS::AccountId}-${AWS::Region}'" # Must match the bucket name created using AWS CLI
+
+Resources:
+  # S3 Bucket for Documentation (Optional - created via AWS CLI)
+  # DocumentationBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Ref AssetsBucketName
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+
+  # DynamoDB Table for Chatbot Logs
+  ChatbotLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoTableName
+      AttributeDefinitions:
+        - AttributeName: Timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Timestamp
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # IAM Role for Lambda Function with Least Privilege
+  GracyChatLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GracyChatLambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: # Logging Permissions (Minimum required)
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: Allow # DynamoDB Permissions (Least Privilege)
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt ChatbotLogsTable.Arn
+              - Effect: Allow 
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/lambda_package-v1.zip'
+              - Effect: Allow 
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/python_requests_layer.zip'
+
+  # Lambda Layer for 'requests' Library
+  RequestsLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: GracyChatRequestsLayer
+      Description: Provides the 'requests' library for the Lambda function.
+      Content:
+        S3Bucket: !Ref AssetsBucketName
+        S3Key: python_requests_layer.zip
+      CompatibleRuntimes:
+        - python3.9
+
+  # Lambda Function Definition
+  GracyChatLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GracyChatFunction
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt GracyChatLambdaRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        S3Bucket: !Ref AssetsBucketName
+        S3Key: lambda_package-v1.zip
+      Environment:
+        Variables:
+          OPENWEATHER_API_KEY: !Ref OpenWeatherApiKey
+          DYNAMODB_TABLE_NAME: !Ref DynamoTableName
+      Layers:
+        - !Ref RequestsLambdaLayer
+
+  # API Gateway REST API
+  GracyChatApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: GracyChatApi
+
+  # API Gateway Resource - /chatbot
+  ChatbotResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref GracyChatApi
+      ParentId: !GetAtt GracyChatApi.RootResourceId
+      PathPart: chatbot
+
+  # API Gateway Method - POST /chatbot - Integrated with Lambda
+  ChatbotPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      RestApiId: !Ref GracyChatApi
+      ResourceId: !Ref ChatbotResource
+      AuthorizationType: NONE # Consider API keys, IAM auth, or Cognito for production
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GracyChatLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: '200'
+
+  # API Gateway Deployment - 'prod' stage
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ChatbotPostMethod
+    Properties:
+      RestApiId: !Ref GracyChatApi
+      StageName: prod
+
+  # Permissions for API Gateway to Invoke Lambda Function
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GracyChatLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GracyChatApi}/*/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage (POST /chatbot)"
+    Value: !Sub "https://${GracyChatApi}.execute-api.${AWS::Region}.amazonaws.com/prod/chatbot"
+  # DocumentationBucketName:
+  #     Description: "S3 Bucket Name for Documentation (optional)"
+  #     Value: !Ref DocumentationBucket
