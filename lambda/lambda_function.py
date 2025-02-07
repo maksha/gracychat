@@ -4,13 +4,14 @@ import requests
 import os
 import re
 from datetime import datetime
+from typing import Dict, Any, Union
 
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ['DYNAMODB_TABLE_NAME']
 weather_api_key = os.environ['OPENWEATHER_API_KEY']
 logs_table = dynamodb.Table(table_name)
 
-def get_weather(city):
+def get_weather(city: str) -> Dict[str, Union[str, float]]:
     base_url = "https://api.openweathermap.org/data/2.5/weather"
     params = {
         'q': city,
@@ -30,7 +31,7 @@ def get_weather(city):
         print(f"Weather API error: {e}")
         return {"error": "Failed to fetch weather data due to an API error."}
 
-def get_joke():
+def get_joke() -> Dict[str, str]:
     url = "https://official-joke-api.appspot.com/random_joke"
     try:
         response = requests.get(url)
@@ -44,7 +45,7 @@ def get_joke():
         print(f"Joke API error: {e}")
         return {"error": "Failed to fetch joke due to an API error."}
 
-def lambda_handler(event, context):
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     query = ''
     user_query = ''
     try:
@@ -65,7 +66,7 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({"error": "Invalid request"})
         }
-
+    
     if not query:
         return {
             'statusCode': 400,
@@ -74,9 +75,8 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({"error": "Missing query"})
         }
-
-    final_response = {}
-
+    
+    final_response: Dict[str, Union[Dict[str, Union[str, float]], str]] = {}
     weather_match = re.search(r"(weather|forecast|temperature)\s+(?:in|for|about|of)?\s*(.+)", query_lower)
     if weather_match:
         city = weather_match.group(2).strip().rstrip('?')
@@ -85,7 +85,7 @@ def lambda_handler(event, context):
             final_response['weather'] = weather_data
         else:
             final_response['weather_error'] = weather_data['error']
-
+    
     joke_match = re.search(r"(joke|funny|humor)", query_lower)
     if joke_match:
         joke_data = get_joke()
@@ -93,21 +93,22 @@ def lambda_handler(event, context):
             final_response['joke'] = joke_data
         else:
             final_response['joke_error'] = joke_data['error']
-
+    
     if not final_response:
         final_response['general_response'] = "I can only process weather and joke requests."
-
+    
     timestamp = datetime.utcnow().isoformat()
     log_data = {
         'Timestamp': timestamp,
         'Query': user_query,
         'Response': json.dumps(final_response)
     }
+    
     try:
         logs_table.put_item(Item=log_data)
     except Exception as e:
         print(f"DynamoDB Logging error: {e}")
-
+    
     return {
         'statusCode': 200,
         'headers': {
