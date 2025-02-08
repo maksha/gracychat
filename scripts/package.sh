@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_NAME=$(basename $0)
+SCRIPT_NAME=$(basename "$0")
 LAMBDA_FUNCTION_S3KEY="lambda_package"
 LAMBDA_LAYER_S3KEY="python_layer"
 
@@ -46,11 +46,18 @@ mkdir -p "$TEMP_DIR/python"
 cp "$LAMBDA_FUNCTION_FILENAME" "$TEMP_DIR/"
 pip install -r "$LAYER_REQUIREMENTS_FILENAME" -t "$TEMP_DIR/python"
 
+# Timestamp as version for the ZIP archives
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+# Define versioned S3 keys
+LAMBDA_FUNCTION_S3KEY_VER="${LAMBDA_FUNCTION_S3KEY}-v${TIMESTAMP}.zip"
+LAMBDA_LAYER_S3KEY_VER="${LAMBDA_LAYER_S3KEY}-v${TIMESTAMP}.zip"
+
 # ZIP archives for the lambda layer and lambda function
 cd "$TEMP_DIR" || exit
-zip -r9 ../"$LAMBDA_FUNCTION_S3KEY".zip "$(basename "$LAMBDA_FUNCTION_FILENAME")"
+zip -r9 "../$LAMBDA_FUNCTION_S3KEY_VER" "$(basename "$LAMBDA_FUNCTION_FILENAME")"
 echo "----"
-zip -r9 ../"$LAMBDA_LAYER_S3KEY".zip python/
+zip -r9 "../$LAMBDA_LAYER_S3KEY_VER" python/
 echo "----"
 
 # Clean up the temporary directory
@@ -59,5 +66,9 @@ rm -rf "$TEMP_DIR"
 
 # Display the location of the ZIP files
 echo -e "Packaging complete. Packages are ready for upload:"
-echo -e " \e[32m\u2714\e[0m - $(pwd)/"$LAMBDA_FUNCTION_S3KEY".zip ($(get_zip_info $(pwd)/"$LAMBDA_FUNCTION_S3KEY".zip))"
-echo -e " \e[32m\u2714\e[0m - $(pwd)/"$LAMBDA_LAYER_S3KEY".zip ($(get_zip_info $(pwd)/"$LAMBDA_LAYER_S3KEY".zip))\n"
+echo -e " \e[32m\u2714\e[0m - $(pwd)/$LAMBDA_FUNCTION_S3KEY_VER ($(get_zip_info $(pwd)/$LAMBDA_FUNCTION_S3KEY_VER))"
+echo -e " \e[32m\u2714\e[0m - $(pwd)/$LAMBDA_LAYER_S3KEY_VER ($(get_zip_info $(pwd)/$LAMBDA_LAYER_S3KEY_VER))\n"
+
+# Output the versioned S3 keys for use in CloudFormation
+echo "LAMBDA_FUNCTION_S3KEY_VER=$LAMBDA_FUNCTION_S3KEY_VER"
+echo "LAMBDA_LAYER_S3KEY_VER=$LAMBDA_LAYER_S3KEY_VER"

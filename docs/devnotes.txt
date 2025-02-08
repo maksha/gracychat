@@ -16,9 +16,11 @@ aws cloudformation deploy \
   --template-file cloudformation/gracychat.yaml \
   --stack-name gracychat-stack \
   --capabilities CAPABILITY_IAM \
-  --parameter-overrides OpenWeatherApiKey="${OPENWEATHER_API_KEY}" \
+  --parameter-overrides OpenWeatherApiKey="$OPENWEATHER_API_KEY" \
                         DynamoTableName="GracyChatLogs" \
-                        AssetsBucketName="${BUCKET_NAME}"
+                        AssetsBucketName="$BUCKET_NAME" \
+                        LambdaFunctionS3Key="$LAMBDA_FUNCTION_S3KEY" \
+                        LambdaLayerS3Key="$LAMBDA_LAYER_S3KEY"
 
 aws cloudformation describe-stacks --stack-name gracychat-stack
 
@@ -34,3 +36,7 @@ aws cloudformation update-stack \
 aws cloudformation describe-stacks --stack-name gracychat-stack \
   --query 'Stacks[0].{StackName: StackName, CreationTime: CreationTime, LastUpdateTime: LastUpdatedTime, StackStatus: StackStatus, ApiEndpoint: Outputs[?OutputKey==`ApiEndpoint`].OutputValue}' \
   --output json
+
+
+// delete with wildcard
+aws s3 rm s3://${BUCKET_NAME}/ --recursive --exclude "*" --include "lambda_package*" --include "python_layer*"

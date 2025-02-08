@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description:  Deploys the GracyChat multi-domain chatbot application.
+Description: Deploys the GracyChat multi-domain chatbot application.
 
 Parameters:
   OpenWeatherApiKey:
     Type: String
     Description: API key for OpenWeatherMap. Required for weather functionality.
-    NoEcho: true 
+    NoEcho: true
   DynamoTableName:
     Type: String
     Description: Name of the DynamoDB table for logs.
@@ -13,20 +13,15 @@ Parameters:
   AssetsBucketName:
     Type: String
     Description: Name of the S3 bucket for assets (Lambda code, docs).
-    Default: "!Sub 'gracychat-bucket-${AWS::AccountId}-${AWS::Region}'" # Must match the bucket name created using AWS CLI
+    Default: "!Sub 'gracychat-bucket-${AWS::AccountId}-${AWS::Region}'"
+  LambdaFunctionS3Key:
+    Type: String
+    Description: S3 key for the Lambda function ZIP file.
+  LambdaLayerS3Key:
+    Type: String
+    Description: S3 key for the Lambda layer ZIP file.
 
 Resources:
-  # S3 Bucket for Documentation (Optional - created via AWS CLI)
-  # DocumentationBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Ref AssetsBucketName
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: true
-  #       BlockPublicPolicy: true
-  #       IgnorePublicAcls: true
-  #       RestrictPublicBuckets: true
-
   # DynamoDB Table for Chatbot Logs
   ChatbotLogsTable:
     Type: AWS::DynamoDB::Table
@@ -58,23 +53,23 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: # Logging Permissions (Minimum required)
+                Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: 'arn:aws:logs:*:*:*'
-              - Effect: Allow # DynamoDB Permissions (Least Privilege)
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/GracyChatFunction:*'
+              - Effect: Allow
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt ChatbotLogsTable.Arn
-              - Effect: Allow 
+              - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/lambda_package-v1.zip'
-              - Effect: Allow 
+                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/${LambdaFunctionS3Key}'
+              - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/python_requests_layer.zip'
+                Resource: !Sub 'arn:aws:s3:::${AssetsBucketName}/${LambdaLayerS3Key}'
 
   # Lambda Layer for 'requests' Library
   RequestsLambdaLayer:
@@ -84,7 +79,7 @@ Resources:
       Description: Provides the 'requests' library for the Lambda function.
       Content:
         S3Bucket: !Ref AssetsBucketName
-        S3Key: python_requests_layer.zip
+        S3Key: !Ref LambdaLayerS3Key
       CompatibleRuntimes:
         - python3.9
 
@@ -100,7 +95,7 @@ Resources:
       MemorySize: 128
       Code:
         S3Bucket: !Ref AssetsBucketName
-        S3Key: lambda_package-v1.zip
+        S3Key: !Ref LambdaFunctionS3Key
       Environment:
         Variables:
           OPENWEATHER_API_KEY: !Ref OpenWeatherApiKey
@@ -158,6 +153,3 @@ Outputs:
   ApiEndpoint:
     Description: "API Gateway endpoint URL for Prod stage (POST /chatbot)"
     Value: !Sub "https://${GracyChatApi}.execute-api.${AWS::Region}.amazonaws.com/prod/chatbot"
-  # DocumentationBucketName:
-  #     Description: "S3 Bucket Name for Documentation (optional)"
-  #     Value: !Ref DocumentationBucket
