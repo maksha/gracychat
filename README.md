@@ -266,3 +266,7 @@ $ curl -X POST "${API_ENDPOINT}" -H "Content-Type: application/json" -d '{"query
 {"joke": {"setup": "What do ghosts call their true love?", "punchline": "Their ghoul-friend"}}
 
 ```
+
+#### **DEVELOPER NOTE**
+- TODO: Improve the Lambda Function (e.g., rate limiting, better logging)
+- TODO: Improve the packaging and deployment script (better versioning control or maybe find a solution using AWS own packaging/deployment feature if available)
