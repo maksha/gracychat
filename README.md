@@ -11,7 +11,6 @@ Multi-Domain Chatbot to fetch Weather Information and Random Jokes.
 
 ![Architecture Overview](docs/GracyChat-Diagram.png)
 
-*Public Access: [GracyChat Diagram](https://s3.amazonaws.com/gracychat-bucket-342173272267-us-east-1/GracyChat-Diagram.png)*
 
 ### **Components and Services**
 1. **User:** The individual or application interacting with the chatbot via a POST request to the `/chatbot` endpoint.
@@ -157,67 +156,112 @@ The following cloudformation template defines the infrastructure for GracyChat.
 
 ## **Deployment Process** 
 ### **Package Lambda Function and Dependencies**
-1. Go to `lambda/` directory
-2. Install Python dependencies into local directory for lambda layer packaging:
-    ```bash
-    $ mkdir python
-    $ pip install -r requirements.txt -t ./python
-    $ zip -r9 python_requests_layer.zip python/
+Prepare the Lambda function and its dependencies for deployment by using the packaging script. This script automates the creation of necessary ZIP packages.
 
-    $ unzip -l python_requests_layer.zip          # verify the content of the created lambda layer package
-    ```
-3. Create a ZIP archive for the lambda function:
-    ```bash
-    $ zip -r lambda_package.zip lambda_function.py
-    ```
+```bash
+# run from project root directory
+$ source scripts/package.sh lambda/lambda_function.py lambda/requirements.txt
 
-4. Upload both packages to S3 bucket:
-    ```bash
-    # Note: ${BUCKET_NAME} is an environment variable that we created in the previous section.
-    $ aws s3 cp lambda_package.zip s3://${BUCKET_NAME}/lambda_package.zip
-    $ aws s3 cp python_requests_layer.zip s3://${BUCKET_NAME}/python_requests_layer.zip
-    ```
+Packaging complete. Packages are ready for upload:
+ ✔ - /testcases/gracychat/lambda_package-v20250208164323.zip (1 file(s), 3922 byte(s))
+ ✔ - /testcases/gracychat/python_layer-v20250208164323.zip (221 file(s), 2848127 byte(s))
+
+LAMBDA_FUNCTION_S3KEY=lambda_package-v20250208164323.zip
+LAMBDA_LAYER_S3KEY=python_layer-v20250208164323.zip
+```
+
+The script will:
+
+- Generate two ZIP files: 
+    - `lambda_package-vYYYYMMDDHHMMSS.zip` (containing the Lambda function code) 
+    - `python_layer-vYYYYMMDDHHMMSS.zip` (containing Python dependencies)
+
+- Display export commands that will also set the `LAMBDA_FUNCTION_S3KEY` and `LAMBDA_LAYER_S3KEY` environment variables in your current shell. These variables will be used by the deployment script to upload the packaged files.
+
 
 ### **Deploy CloudFormation Stack**
-1. Navigate to project's root directory and run the following AWS CLI command:
-    ```bash
-    $ aws cloudformation deploy \
-        --template-file cloudformation/gracychat.yaml \
-        --stack-name gracychat-stack \
-        --capabilities CAPABILITY_IAM \
-        --parameter-overrides OpenWeatherApiKey="${OPENWEATHER_API_KEY}" \
-                                DynamoTableName="GracyChatLogs" \
-                                AssetsBucketName="${BUCKET_NAME}"
-    ```
+Following the packaging step, deploy the CloudFormation stack using the `cfdeploy.sh` script from the same current directory:
 
-2. Verify the Deployment using AWS CLI:
-    ```bash
-    $ aws cloudformation describe-stacks --stack-name gracychat-stack \
-        --query 'Stacks[0].{StackName: StackName, CreationTime: CreationTime, LastUpdateTime: LastUpdatedTime, StackStatus: StackStatus, ApiEndpoint: Outputs[?OutputKey==`ApiEndpoint`].OutputValue}' \
-        --output json
-    ```
-    > **Description**:
-    >
-    > *   **`StackName`**:  Displays the name of your CloudFormation stack (e.g., "gracychat-stack").
-    > *   **`CreationTime`**: Shows the timestamp when the stack was initially created (e.g., "2024-03-01T10:00:00.000Z").
-    > *   **`LastUpdateTime`**: Shows the timestamp of the last successful update to the stack. If the stack has only been created and not updated since, this time will be the same as `CreationTime`.
-    > *   **`StackStatus`**: Displays the current status of the CloudFormation stack (e.g., "UPDATE_COMPLETE", "CREATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"). This is for verifying successful deployments or identifying failures.
-    > *   **`ApiEndpoint`**: Shows the API Gateway endpoint URL for the chatbot.
+```bash
+$ /scripts/cfdeploy.sh -t cloudformation/gracychat.yaml
+
+----------------------------------------------------------------------------------------------
+  Deployment Parameters:
+  CloudFormation Template:      cloudformation/gracychat.yaml
+  S3 Bucket Name         :      gracychat-bucket-112233445566-us-east-1
+  OpenWeather API Key    :      *******a2a
+  Lambda Function S3 Key :      lambda_package-v20230112345678.zip
+  Lambda Layer S3 Key    :      python_layer-v20230201123456.zip
+----------------------------------------------------------------------------------------------
+
+Press 'q' to quit, or any other key to proceed with deployment. 
+
+...
+
+✓ - CloudFormation stack deployed successfully
+
+- Verifying the deployment...
+✓ Deployment Verified!
+--------------------------------------------------------------------------
+Details:
+  Stack Status:                 UPDATE_COMPLETE
+  API Endpoint:                 [
+  "https://AABBCCDDEE112233.amazonaws.com/prod/chatbot"
+]
+--------------------------------------------------------------------------
+
+```
+Or you can customize the deployment by providing parameters directly via command-line options.  For a full list of available options and their usage run the script with `-h` flag:
+
+```txt
+Usage:
+       cfdeploy.sh [options]
+
+ Options:
+  -t <cloudformation_template_file>  CloudFormation template file (required)
+  -b <bucket_name>                   S3 bucket name (required if not the same as the hardcoded format)
+  -k <openweathermap_api_key>        OpenWeatherMap API key (required if not in .env as OPENWEATHER_API_KEY)
+  -f <lambda_function_s3key>         Lambda function package S3 key
+  -l <lambda_layer_s3key>            Lambda layer package S3 key
+  -h                                 Show this help message
+
+ Environment Variables:
+   OPENWEATHER_API_KEY                OpenWeatherMap API key (can be set in .env file)
+   LAMBDA_FUNCTION_S3KEY              Lambda function package S3 key (can be set in .env file)
+   LAMBDA_LAYER_S3KEY                 Lambda layer package S3 key (can be set in .env file)
+
+ Note:
+   - OPENWEATHER_API_KEY is required either as a parameter or in .env file.
+   - LAMBDA_FUNCTION_S3KEY and LAMBDA_LAYER_S3KEY will be read from parameters if not found in .env.
+
+ Examples:
+   # Deploy using template file, bucket name, and API key as parameters:
+     cfdeploy.sh -t cloudformation/gracychat.yaml -b gracychat-bucket-112233445566-us-east-1 -k YOUR_API_KEY
+
+   # Deploy using template file only, bucket name, API key, and Lambda package keys from .env:
+     cfdeploy.sh -t cloudformation/gracychat.yaml
+
+   # Deploy using template file and bucket name, API key from .env, and providing Lambda package keys:
+     cfdeploy.sh -t cloudformation/gracychat.yaml -b gracychat-bucket-112233445566-us-east-1 -f lambda_package.zip -l python_layer.zip
+
+```
+
+
 
 ## **Test the Chatbot API**
 Test the API using `curl`:
 
 ```bash
-# Get the API_ENDPOINT URL using AWS CLI and store it an environment variable
+# Get the API Endpoint URL using AWS CLI and store it an environment variable
 $ API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name gracychat-stack --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" --output text)
 
 # Test the API using curl
 
-# Weather
+# Test Weather API
 $ curl -X POST "${API_ENDPOINT}" -H "Content-Type: application/json" -d '{"query": "What'\''s the weather in London?"}'
 {"weather": {"city_name": "London", "description": "clear sky", "temperature_celsius": 4.45}}
 
-# Jokes
+# Test Random Jokes API
 $ curl -X POST "${API_ENDPOINT}" -H "Content-Type: application/json" -d '{"query": "Tell me a joke."}'
 {"joke": {"setup": "What do ghosts call their true love?", "punchline": "Their ghoul-friend"}}
 
