@@ -186,7 +186,7 @@ echo -e "${CHECKMARK} - CloudFormation stack deployed successfully"
 # Verify the Deployed CloudFormation Stack
 echo -e "\n- Verifying the deployment..."
 DEPLOYMENT_INFO=$(aws cloudformation describe-stacks --stack-name gracychat-stack \
-    --query 'Stacks[0].{StackName: StackName, StackStatus: StackStatus, ApiEndpoint: Outputs[?OutputKey==`ApiEndpoint`].OutputValue}' \
+    --query 'Stacks[0].{StackName: StackName, StackStatus: StackStatus, StackStatusReason: StackStatusReason, ApiEndpoint: Outputs[?OutputKey==`ApiEndpoint`].OutputValue}' \
     --output json)
 
 if [ $? -ne 0 ]; then
@@ -194,10 +194,38 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Check Stack Status
+# Check Stack Status and Status Reason
 STACK_STATUS=$(echo "$DEPLOYMENT_INFO" | jq -r '.StackStatus')
+STACK_STATUS_REASON=$(echo "$DEPLOYMENT_INFO" | jq -r '.StackStatusReason')
 
-if [[ "$STACK_STATUS" == "CREATE_COMPLETE" || "$STACK_STATUS" == "UPDATE_COMPLETE" ]]; then
+# CloudFormation stack failure statuses:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/view-stack-events.html#cfn-console-view-stack-data-resources-status-codes
+FAILURE_STATUSES=(
+    "CREATE_FAILED"
+    "DELETE_FAILED"
+    "UPDATE_ROLLBACK_FAILED"
+    "UPDATE_ROLLBACK_COMPLETE"
+    "ROLLBACK_COMPLETE"
+    "IMPORT_ROLLBACK_FAILED"
+    "IMPORT_ROLLBACK_COMPLETE"
+)
+
+is_failure=false
+for status in "${FAILURE_STATUSES[@]}"; do
+    if [[ "$STACK_STATUS" == "$status" ]]; then
+        is_failure=true
+        break
+    fi
+done
+
+if "$is_failure"; then
+    echo -e " ${X_MARK} ${RED}${BOLD}Error:${NC} Deployment Verification Failed."
+    echo -e "  ${RED}${BOLD}Stack Status:${NC} \t\t${STACK_STATUS}"
+    echo -e "  ${RED}${BOLD}Status Reason:${NC} \t\t${STACK_STATUS_REASON}"
+    echo -e "  Raw Deployment Info for Debugging:"
+    echo -e "$DEPLOYMENT_INFO \n"
+    exit 1
+elif [[ "$STACK_STATUS" == "CREATE_COMPLETE" || "$STACK_STATUS" == "UPDATE_COMPLETE" ]]; then
     API_ENDPOINT_VALUE=$(echo "$DEPLOYMENT_INFO" | jq -r '.ApiEndpoint')
     export API_ENDPOINT="$API_ENDPOINT_VALUE"
 
@@ -208,7 +236,7 @@ if [[ "$STACK_STATUS" == "CREATE_COMPLETE" || "$STACK_STATUS" == "UPDATE_COMPLET
     echo -e "  ${BOLD}API Endpoint:${NC} \t\t$(echo "$DEPLOYMENT_INFO" | jq -r '.ApiEndpoint')"
     echo -e "--------------------------------------------------------------------------"
 else
-    echo -e " ${X_MARK} ${RED}${BOLD}Error:${NC} Deployment Verification Failed."
+    echo -e " ${X_MARK} ${RED}${BOLD}Error:${NC} Deployment failed with unknown error status."
     echo -e "  ${BOLD}Stack Status:${NC} \t\t${STACK_STATUS}"
     echo -e "  Raw Deployment Info for Debugging:"
     echo -e "$DEPLOYMENT_INFO \n"
