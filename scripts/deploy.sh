@@ -58,13 +58,14 @@ while getopts "l:r:t:b:k:h" opt; do
   t) CLOUDFORMATION_TEMPLATE_FILE="$OPTARG" ;;
   b) BUCKET_NAME="$OPTARG" ;;
   k) OPENWEATHER_API_KEY="$OPTARG" ;;
-  h) usage ;; 
+  h) usage ;;
   *) usage ;;
   esac
 done
 
 # ---------- Interactive Prompts for Missing Parameters ----------
-echo -e "\n${BOLD}GracyChat Deployment Script${NC}\n"
+echo -e "\n${BOLD}GracyChat Deployment Script${NC}"
+echo -e "Run this script from the project root directory to deploy GracyChat."
 echo -e "Press 'Enter' to use the default value in brackets. Press 'Ctrl+C' to exit.\n"
 
 DEFAULT_LAMBDA_FILE="lambda/lambda_function.py"
@@ -183,6 +184,11 @@ aws s3 cp "$LAMBDA_FUNCTION_S3KEY" "s3://${BUCKET_NAME}/${LAMBDA_FUNCTION_S3KEY}
 aws s3 cp "$LAMBDA_LAYER_S3KEY" "s3://${BUCKET_NAME}/${LAMBDA_LAYER_S3KEY}"
 echo -e "${CHECKMARK} Packages uploaded successfully."
 
+# Clean-up the generated ZIP files
+echo -e "\nCleaning up generated ZIP files..."
+rm -f "$LAMBDA_FUNCTION_S3KEY" "$LAMBDA_LAYER_S3KEY"
+echo -e "${CHECKMARK} Clean-up complete."
+
 # Deploy the CloudFormation stack
 echo -e "\nDeploying CloudFormation stack..."
 aws cloudformation deploy \
@@ -200,15 +206,38 @@ echo -e "${CHECKMARK} CloudFormation stack deployed successfully."
 
 # Verify deployment and output API endpoint
 echo -e "\nVerifying deployment..."
-DEPLOYMENT_INFO=$(aws cloudformation describe-stacks --stack-name gracychat-stack \
+API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name gracychat-stack \
   --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
   --output text)
+STACK_STATUS=$(aws cloudformation describe-stacks --stack-name gracychat-stack \
+  --query 'Stacks[0].StackStatus' \
+  --output text)
 
-if [ -n "$DEPLOYMENT_INFO" ]; then
-  echo -e "${CHECKMARK} Deployment Verified!"
-  echo -e "API Endpoint: ${BOLD}$DEPLOYMENT_INFO${NC}"
+# If STACK_STATUS is not CREATE_COMPLETE OR UPDATE_COMPLETE, then exit with error
+if [ "$STACK_STATUS" != "CREATE_COMPLETE" ] && [ "$STACK_STATUS" != "UPDATE_COMPLETE" ]; then
+  echo -e "${X_MARK} Error: CloudFormation stack creation failed. Please check the stack events."
+  exit 1
 else
-  echo -e "${X_MARK} Error: Could not retrieve API Endpoint. Please check the CloudFormation stack status."
+  echo -e "${CHECKMARK} Deployment Verified!"
+  echo -e "Stack Status: ${BOLD}$STACK_STATUS${NC}"
 fi
 
 echo -e "\n${GREEN}${BOLD}Deployment complete!${NC}\n"
+
+# Add or Update API_ENDPOINT variable in .env for future use
+if [ -f .env ]; then
+  sed -i "s#API_ENDPOINT=.*#API_ENDPOINT=$API_ENDPOINT#" .env
+else
+  echo "API_ENDPOINT=$API_ENDPOINT" >>.env
+fi
+
+echo -e "\n------------------------------------------------------------------------------------------------------------------------"
+echo -e "${GREEN}${BOLD}## Test the API ##${NC}"
+echo -e "\nAPI Endpoint added/updated in .env:"
+echo -e "  ${BOLD}API_ENDPOINT${NC}="
+echo -e "\nReload .env:" 
+echo -e "  $ ${BOLD}source .env${NC}" 
+echo -e "\nVerify that the API is working by sending a POST request to the endpoint:"
+echo -e "  $ curl -X POST -H 'Content-Type: application/json' -d '{\"query\": \"What is the weather in London?\"}' \"\$API_ENDPOINT\""
+echo -e "  $ curl -X POST -H 'Content-Type: application/json' -d '{\"query\": \"Tell me a joke\"}' \"\$API_ENDPOINT\""
+echo -e "------------------------------------------------------------------------------------------------------------------------\n"
