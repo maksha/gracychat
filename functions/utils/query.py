@@ -25,8 +25,10 @@ def extract_query(event: Dict[str, Any]) -> Tuple[str, str]:
         if "body" in event and event["body"]:
             request_body = json.loads(event["body"])
             query = request_body.get("query", "")
+            user_query = query
         elif "queryStringParameters" in event and event["queryStringParameters"]:
             query = event["queryStringParameters"].get("query", "")
+            user_query = query
         elif isinstance(event, dict):
             query = event.get("query", "")
             user_query = query
