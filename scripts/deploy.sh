@@ -72,6 +72,9 @@ DEFAULT_LAMBDA_DIR="functions"
 DEFAULT_REQUIREMENTS_FILE="functions/requirements.txt"
 DEFAULT_TEMPLATE_FILE="cloudformation/gracychat.yaml"
 DEFAULT_OPENWEATHER_API_KEY="${OPENWEATHER_API_KEY:-}"
+DEFAULT_DYNAMODB_TABLE_NAME_PREFIX="${DEFAULT_DYNAMODB_TABLE_NAME_PREFIX:-GracyChatLogs}"
+DEFAULT_DYNAMODB_ENV_SUFFIX="${DEFAULT_DYNAMODB_ENV_SUFFIX:-prod}"
+DEFAULT_DYNAMODB_TABLE_NAME="${DEFAULT_DYNAMODB_TABLE_NAME_PREFIX}-${DEFAULT_DYNAMODB_ENV_SUFFIX}"
 
 # Lambda Function directory
 if [ -z "$LAMBDA_CODE_DIR" ]; then
@@ -102,6 +105,21 @@ if [ ! -f "$CLOUDFORMATION_TEMPLATE_FILE" ]; then
   echo -e "${X_MARK} Error: CloudFormation template file '$CLOUDFORMATION_TEMPLATE_FILE' not found!"
   exit 1
 fi
+
+# DynamoDB table name Prefix
+if [ -z "$DYNAMODB_TABLE_NAME_PREFIX" ]; then
+  read -p "Enter DynamoDB table name prefix (default: ${DEFAULT_DYNAMODB_TABLE_NAME_PREFIX}): " input
+  DEFAULT_DYNAMODB_TABLE_NAME_PREFIX="${input:-$DEFAULT_DYNAMODB_TABLE_NAME_PREFIX}"
+fi
+
+# DynamoDB table name EnvSuffix
+if [ -z "$DYNAMODB_ENV_SUFFIX" ]; then
+  read -p "Enter DynamoDB table name environment suffix (default: ${DEFAULT_DYNAMODB_ENV_SUFFIX}): " input
+  DEFAULT_DYNAMODB_ENV_SUFFIX="${input:-$DEFAULT_DYNAMODB_ENV_SUFFIX}"
+fi
+
+# Set DynamoDB Table Name (prefix + env suffix)
+DYNAMODB_TABLE_NAME="${DEFAULT_DYNAMODB_TABLE_NAME_PREFIX}-${DEFAULT_DYNAMODB_ENV_SUFFIX}"
 
 # OpenWeatherMap API key
 if [ -z "$OPENWEATHER_API_KEY" ]; then
@@ -157,6 +175,7 @@ echo -e " ${CHECKMARK} $(pwd)/$LAMBDA_LAYER_S3KEY ($(get_zip_info "$(pwd)/$LAMBD
 # ---------- S3 Upload and CloudFormation Deployment ----------
 echo -e "\n${BOLD}Deployment Parameters:${NC}"
 echo -e " CloudFormation Template: \t$CLOUDFORMATION_TEMPLATE_FILE"
+echo -e " DynamoDB Table Name: \t\t$DYNAMODB_TABLE_NAME"
 echo -e " S3 Bucket Name: \t\t$BUCKET_NAME"
 echo -e " OpenWeather API Key: \t\t*******$(echo "$OPENWEATHER_API_KEY" | rev | cut -c-3 | rev)"
 echo -e " Lambda Function S3 Key: \t$LAMBDA_FUNCTION_S3KEY"
@@ -198,7 +217,7 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
   OpenWeatherApiKey="$OPENWEATHER_API_KEY" \
-  DynamoTableName="GracyChatLogs" \
+  DynamoTableName="$DYNAMODB_TABLE_NAME" \
   AssetsBucketName="$BUCKET_NAME" \
   LambdaFunctionS3Key="$LAMBDA_FUNCTION_S3KEY" \
   LambdaLayerS3Key="$LAMBDA_LAYER_S3KEY"
