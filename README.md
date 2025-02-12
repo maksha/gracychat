@@ -1,4 +1,5 @@
 # GracyChat - Multi-Domain Chatbot
+
 ![AWS S3](https://img.shields.io/badge/AWS_S3-blue.svg)
 ![CloudFormation](https://img.shields.io/badge/CloudFormation-blueviolet.svg)
 ![Lambda Function](https://img.shields.io/badge/AWS_Lambda-purple.svg)
@@ -6,7 +7,6 @@
 ![DynamoDB](https://img.shields.io/badge/DynamoDB-yellow.svg)
 ![Bash](https://img.shields.io/badge/Bash-black.svg)
 ![Python ≥3.6](https://img.shields.io/badge/Python-%E2%89%A53.6-blue.svg)
-
 
 GracyChat is a serverless multi-domain chatbot designed to fetch weather information and random jokes. It integrates with the OpenWeatherMap API and the Official Joke API and is fully deployed using AWS CloudFormation with resources such as Lambda, API Gateway, DynamoDB, and S3.
 
@@ -18,18 +18,21 @@ GracyChat is a serverless multi-domain chatbot designed to fetch weather informa
 
 Serverless architecture with the following key components:
 
-1. **User Interaction**  
+1. **User Interaction**
+
    - Users send POST requests to the `/chatbot` endpoint via API Gateway.
 
-2. **API Gateway**  
+2. **API Gateway**
+
    - Receives requests and routes them to Lambda functions.
 
-3. **Lambda Functions**  
+3. **Lambda Functions**
+
    - **Weather Function:** Fetches weather data from OpenWeatherMap.
    - **Joke Function:** Retrieves random jokes from the Official Joke API.
    - **Logging:** Logs each query and its response into DynamoDB for later analysis.
 
-4. **Data Storage and Assets**  
+4. **Data Storage and Assets**
    - **DynamoDB:** Stores interaction logs.
    - **S3 Bucket:** Hosts static assets and packages for Lambda functions.
 
@@ -96,6 +99,7 @@ pip install -r functions/requirements.txt
 ### Packaging and Deployment
 
 The updated deployment process leverages the [scripts/deploy.sh](scripts/deploy.sh) script, which automates:
+
 - Packaging your Lambda function and its dependencies into versioned ZIP files.
 - Uploading the packages to an S3 bucket.
 - Deploying the AWS CloudFormation stack.
@@ -109,6 +113,7 @@ Run the following command from the project root:
 ```
 
 **Parameters:**
+
 - **-l:** Path to the Lambda code directory (default: `functions`).
 - **-r:** Path to the `requirements.txt` file (default: `functions/requirements.txt`).
 - **-t:** CloudFormation template file (default: `cloudformation/gracychat.yaml`).
@@ -119,7 +124,7 @@ The script will prompt for any missing parameters and display the configuration 
 
 ### Verifying the Deployment
 
-Once deployment is complete, source the updated environment variables and test the deployed API:
+Once deployment is complete, reload the updated environment variables and test the deployed API:
 
 ```bash
 source .env
@@ -128,24 +133,6 @@ curl -X POST -H 'Content-Type: application/json' -d '{"query": "Tell me a joke"}
 ```
 
 Replace `"$API_ENDPOINT"` with the endpoint provided by the deployment output if necessary.
-
-### Testing the API
-
-You can test the chatbot functionality directly using the following curl commands:
-
-- **Weather Request:**
-
-```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"query": "What is the weather in London?"}' "$API_ENDPOINT"
-```
-
-- **Joke Request:**
-
-```bash
-curl -X POST -H 'Content-Type: application/json' -d '{"query": "Tell me a joke"}' "$API_ENDPOINT"
-```
-
----
 
 ## Additional Notes
 
