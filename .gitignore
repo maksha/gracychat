@@ -4,3 +4,4 @@ __pycache__/
 .env
 *.zip
 python/
+testnotes.txt
