@@ -1,6 +1,6 @@
 #!/bin/bash
 # deploy.sh: Packaging and deployment script for GracyChat.
-#  Run this script from the project root directory to use the default value.
+# Run this script from the project root directory to use the default values.
 
 set -e
 
@@ -10,15 +10,15 @@ usage() {
 Usage: $0 [options]
 
 Options:
-  -l <lambda_function_file>   Path to Lambda function file (default: lambda/lambda_function.py)
-  -r <requirements_file>      Path to requirements.txt file (default: lambda/requirements.txt)
-  -t <template_file>          Path to CloudFormation template file (default: cloudformation/gracychat.yaml)
-  -b <s3_bucket_name>         S3 bucket name (default: gracychat-bucket-{AWS_ACCOUNT_ID}-{AWS_REGION})
-  -k <openweathermap_api_key> OpenWeatherMap API key (default: value from OPENWEATHER_API_KEY env variable)
-  -h                          Show this help message
+  -l <lambda_code_dir>       Path to Lambda Function directory (default: functions)
+  -r <requirements_file>     Path to requirements.txt file (default: functions/requirements.txt)
+  -t <template_file>         Path to CloudFormation template file (default: cloudformation/gracychat.yaml)
+  -b <s3_bucket_name>        S3 bucket name (default: gracychat-bucket-{AWS_ACCOUNT_ID}-{AWS_REGION})
+  -k <openweather_api_key>   OpenWeatherMap API key (default: value from OPENWEATHER_API_KEY env variable)
+  -h                         Show this help message
 
 Example:
-  $0 -l lambda/lambda_function.py -r lambda/requirements.txt -t cloudformation/gracychat.yaml -k YOUR_API_KEY
+  $0 -l functions -r functions/requirements.txt -t cloudformation/gracychat.yaml -k WEATHER_API_KEY
 
 EOF
   exit 1
@@ -53,7 +53,7 @@ X_MARK="${RED}${BOLD}\u2717${NC}"
 # ---------- Parse Command Line Arguments ----------
 while getopts "l:r:t:b:k:h" opt; do
   case "$opt" in
-  l) LAMBDA_FUNCTION_FILENAME="$OPTARG" ;;
+  l) LAMBDA_CODE_DIR="$OPTARG" ;;
   r) REQUIREMENTS_FILENAME="$OPTARG" ;;
   t) CLOUDFORMATION_TEMPLATE_FILE="$OPTARG" ;;
   b) BUCKET_NAME="$OPTARG" ;;
@@ -68,18 +68,18 @@ echo -e "\n${BOLD}GracyChat Deployment Script${NC}"
 echo -e "Run this script from the project root directory to deploy GracyChat."
 echo -e "Press 'Enter' to use the default value in brackets. Press 'Ctrl+C' to exit.\n"
 
-DEFAULT_LAMBDA_FILE="lambda/lambda_function.py"
-DEFAULT_REQUIREMENTS_FILE="lambda/requirements.txt"
+DEFAULT_LAMBDA_DIR="functions"
+DEFAULT_REQUIREMENTS_FILE="functions/requirements.txt"
 DEFAULT_TEMPLATE_FILE="cloudformation/gracychat.yaml"
 DEFAULT_OPENWEATHER_API_KEY="${OPENWEATHER_API_KEY:-}"
 
-# Lambda function file
-if [ -z "$LAMBDA_FUNCTION_FILENAME" ]; then
-  read -p "Enter path to the Lambda function file (default: ${DEFAULT_LAMBDA_FILE}): " input
-  LAMBDA_FUNCTION_FILENAME="${input:-$DEFAULT_LAMBDA_FILE}"
+# Lambda Function directory
+if [ -z "$LAMBDA_CODE_DIR" ]; then
+  read -p "Enter path to the Lambda Function directory (default: ${DEFAULT_LAMBDA_DIR}): " input
+  LAMBDA_CODE_DIR="${input:-$DEFAULT_LAMBDA_DIR}"
 fi
-if [ ! -f "$LAMBDA_FUNCTION_FILENAME" ]; then
-  echo -e "${X_MARK} Error: Lambda function file '$LAMBDA_FUNCTION_FILENAME' not found!"
+if [ ! -d "$LAMBDA_CODE_DIR" ]; then
+  echo -e "${X_MARK} Error: Lambda Function directory '$LAMBDA_CODE_DIR' not found!"
   exit 1
 fi
 
@@ -125,12 +125,13 @@ fi
 # ---------- Packaging Process ----------
 echo -e "\n${BOLD}Packaging Lambda function and dependencies...${NC}"
 TEMP_DIR="TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+
+# Copy the entire Lambda Function directory for packaging
+cp -r "$LAMBDA_CODE_DIR" "$TEMP_DIR/"
+
+# Install Python dependencies for packaging (for the Lambda layer)
 mkdir -p "$TEMP_DIR/python"
-
-# Copy the Lambda function file for packaging
-cp "$LAMBDA_FUNCTION_FILENAME" "$TEMP_DIR/"
-
-# Install Python dependencies for packaging
 pip install -r "$REQUIREMENTS_FILENAME" -t "$TEMP_DIR/python"
 
 # Generate a timestamp for versioning
@@ -143,7 +144,7 @@ LAMBDA_LAYER_S3KEY="python_layer-v${TIMESTAMP}.zip"
 # Create ZIP packages
 (
   cd "$TEMP_DIR" || exit 1
-  zip -r9 "../$LAMBDA_FUNCTION_S3KEY" "$(basename "$LAMBDA_FUNCTION_FILENAME")"
+  zip -r9 "../$LAMBDA_FUNCTION_S3KEY" "$(basename "$LAMBDA_CODE_DIR")"
   zip -r9 "../$LAMBDA_LAYER_S3KEY" python/
 )
 # Clean up temporary directory
