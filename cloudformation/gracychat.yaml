@@ -9,7 +9,7 @@ Parameters:
   DynamoTableName:
     Type: String
     Description: Name of the DynamoDB table for logs.
-    Default: "GracyChatLogs"
+    Default: "!Sub '${DynamoDBTableNamePrefix}-${EnvSuffix}'"
   AssetsBucketName:
     Type: String
     Description: Name of the S3 bucket for assets (Lambda code, docs).
