@@ -76,7 +76,7 @@ Package and deploy GracyChat using the deployment script and CloudFormation temp
 1. **Clone the Repository:**
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/maksha/gracychat.git
 cd gracychat
 ```
 
