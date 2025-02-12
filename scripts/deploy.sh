@@ -234,7 +234,7 @@ fi
 echo -e "\n------------------------------------------------------------------------------------------------------------------------"
 echo -e "${GREEN}${BOLD}## Test the API ##${NC}"
 echo -e "\nAPI Endpoint added/updated in .env:"
-echo -e "  ${BOLD}API_ENDPOINT${NC}="
+echo -e "  ${BOLD}API_ENDPOINT${NC}=$API_ENDPOINT"
 echo -e "\nReload .env:" 
 echo -e "  $ ${BOLD}source .env${NC}" 
 echo -e "\nVerify that the API is working by sending a POST request to the endpoint:"
